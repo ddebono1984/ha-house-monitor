@@ -590,13 +590,18 @@ function renderLiveCards(lz, lh) {
 }
 
 // ── Fetch & refresh ───────────────────────────────────────────────────────────
+function apiUrl(path) {
+  const base = window.location.pathname.replace(/\/kiosk\/?$/, '');
+  return `${base}${path}`;
+}
+
 async function refresh() {
   try {
     const [zRaw, hRaw, zonesRaw, latestRaw] = await Promise.all([
-      fetch('/api/zehnder?hours=24').then(r => r.json()),
-      fetch('/api/heatmiser/avg?hours=24').then(r => r.json()),
-      fetch('/api/heatmiser/zones').then(r => r.json()),
-      fetch('/api/latest').then(r => r.json()),
+      fetch(apiUrl('/api/zehnder?hours=24')).then(r => r.json()),
+      fetch(apiUrl('/api/heatmiser/avg?hours=24')).then(r => r.json()),
+      fetch(apiUrl('/api/heatmiser/zones')).then(r => r.json()),
+      fetch(apiUrl('/api/latest')).then(r => r.json()),
     ]);
 
     zData     = zRaw;

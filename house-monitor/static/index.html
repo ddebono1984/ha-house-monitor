@@ -386,13 +386,19 @@ function setLive(id, val, unit = '') {
 // ── Data fetch ───────────────────────────────────────────────────────────────
 let currentHours = 24;
 
+// Build API URL relative to current page base (works with HA ingress and direct)
+function apiUrl(path) {
+  const base = window.location.pathname.replace(/\/$/, '');
+  return `${base}${path}`;
+}
+
 async function refresh() {
   try {
     const [zRaw, hRaw, zonesRaw, latestRaw] = await Promise.all([
-      fetch(`/api/zehnder?hours=${currentHours}`).then(r => r.json()),
-      fetch(`/api/heatmiser/avg?hours=${currentHours}`).then(r => r.json()),
-      fetch('/api/heatmiser/zones').then(r => r.json()),
-      fetch('/api/latest').then(r => r.json()),
+      fetch(apiUrl(`/api/zehnder?hours=${currentHours}`)).then(r => r.json()),
+      fetch(apiUrl(`/api/heatmiser/avg?hours=${currentHours}`)).then(r => r.json()),
+      fetch(apiUrl('/api/heatmiser/zones')).then(r => r.json()),
+      fetch(apiUrl('/api/latest')).then(r => r.json()),
     ]);
 
     // ── Live cards
