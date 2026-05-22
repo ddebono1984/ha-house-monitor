@@ -96,6 +96,10 @@ def api_latest():
 def dashboard():
     return send_from_directory("static", "index.html")
 
+@app.get("/kiosk")
+def kiosk():
+    return send_from_directory("static", "kiosk.html")
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)

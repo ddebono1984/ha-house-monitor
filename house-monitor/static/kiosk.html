@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>6 Stockyard — House Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0a0e13;
+    --surface: #111720;
+    --border:  #1e2530;
+    --muted:   #5a6a7a;
+    --text:    #e8f0f8;
+    --blue:    #58a6ff;
+    --green:   #3fb950;
+    --orange:  #e09120;
+    --red:     #f85149;
+    --teal:    #39d0c4;
+    --purple:  #bc8cff;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  /* ── Layout ── */
+  .kiosk {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* ── Header ── */
+  .k-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.2vh 2.5vw;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .k-header .title {
+    font-size: 1.1vw;
+    font-weight: 300;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .k-header .time {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.4vw;
+    font-weight: 300;
+    color: var(--text);
+  }
+
+  .k-header .status {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8vw;
+    color: var(--muted);
+  }
+
+  /* ── Main content area ── */
+  .k-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    overflow: hidden;
+  }
+
+  /* ── Panels ── */
+  .k-panel {
+    background: var(--bg);
+    padding: 2vh 2vw;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .k-panel-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65vw;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 1.5vh;
+    flex-shrink: 0;
+  }
+
+  /* ── Live cards in panels ── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5vw;
+    flex: 1;
+    align-items: center;
+  }
+
+  .cards-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .k-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4vh;
+  }
+
+  .k-card .lbl {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6vw;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .k-card .val {
+    font-family: 'DM Mono', monospace;
+    font-size: 2.4vw;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .k-card .unit {
+    font-size: 1vw;
+    font-weight: 300;
+    color: var(--muted);
+  }
+
+  .val.blue   { color: var(--blue); }
+  .val.green  { color: var(--green); }
+  .val.orange { color: var(--orange); }
+  .val.teal   { color: var(--teal); }
+  .val.purple { color: var(--purple); }
+  .val.red    { color: var(--red); }
+  .val.muted  { color: var(--muted); }
+
+  /* ── Chart ── */
+  .k-chart-wrap {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+
+  /* ── Zone table ── */
+  .k-zones {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8vh;
+    overflow: hidden;
+  }
+
+  .k-zone-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 2vw;
+    align-items: center;
+    padding: 0.6vh 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .k-zone-row:last-child { border-bottom: none; }
+
+  .k-zone-name {
+    font-size: 1.1vw;
+    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .k-zone-name .master-tag {
+    font-size: 0.7vw;
+    color: var(--muted);
+    margin-left: 0.5vw;
+  }
+
+  .k-zone-temps {
+    display: flex;
+    gap: 1.5vw;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .k-zone-temp {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.1vh;
+  }
+
+  .k-zone-temp .t-lbl {
+    font-size: 0.55vw;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .k-zone-temp .t-val {
+    font-size: 1.3vw;
+    font-weight: 500;
+  }
+
+  /* ── Call for heat badge ── */
+  .cfh-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7vw;
+    padding: 0.3vh 0.8vw;
+    border-radius: 999px;
+    letter-spacing: 0.1em;
+  }
+
+  .cfh-badge.active {
+    background: rgba(63,185,80,0.15);
+    color: var(--green);
+    border: 1px solid rgba(63,185,80,0.3);
+  }
+
+  .cfh-badge.idle {
+    background: rgba(90,106,122,0.15);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  /* ── Footer ── */
+  .k-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.8vh 2.5vw;
+    border-top: 1px solid var(--border);
+  }
+
+  .k-footer .updated {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65vw;
+    color: var(--muted);
+  }
+
+  /* progress dots for chart rotation */
+  .k-dots {
+    display: flex;
+    gap: 0.5vw;
+  }
+
+  .k-dot {
+    width: 0.4vw; height: 0.4vw;
+    border-radius: 50%;
+    background: var(--border);
+    transition: background 0.3s;
+  }
+
+  .k-dot.active { background: var(--blue); }
+
+  .filter-warn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65vw;
+  }
+</style>
+</head>
+<body>
+<div class="kiosk">
+
+  <!-- Header -->
+  <div class="k-header">
+    <div class="title">6 Stockyard Lane &nbsp;·&nbsp; House Monitor</div>
+    <div class="time" id="k-clock">—</div>
+    <div class="status" id="k-status">—</div>
+  </div>
+
+  <!-- Body: 2×2 grid -->
+  <div class="k-body">
+
+    <!-- Top-left: MVHR live values -->
+    <div class="k-panel">
+      <div class="k-panel-title">Zehnder ComfoAir Q450 — Live</div>
+      <div class="cards-grid" id="mvhr-cards">
+        <div class="k-card">
+          <span class="lbl">Supply Temp</span>
+          <span class="val blue" id="k-supply-temp">—<span class="unit">°C</span></span>
+        </div>
+        <div class="k-card">
+          <span class="lbl">Inside Temp</span>
+          <span class="val teal" id="k-extract-temp">—<span class="unit">°C</span></span>
+        </div>
+        <div class="k-card">
+          <span class="lbl">Outdoor Temp</span>
+          <span class="val muted" id="k-outdoor-temp">—<span class="unit">°C</span></span>
+        </div>
+        <div class="k-card">
+          <span class="lbl">HRV Efficiency</span>
+          <span class="val green" id="k-efficiency">—<span class="unit">%</span></span>
+        </div>
+        <div class="k-card">
+          <span class="lbl">Supply RH</span>
+          <span class="val blue" id="k-supply-rh">—<span class="unit">%</span></span>
+        </div>
+        <div class="k-card">
+          <span class="lbl">Inside RH</span>
+          <span class="val purple" id="k-extract-rh">—<span class="unit">%</span></span>
+        </div>
+        <div class="k-card">
+          <span class="lbl">Fan Speed</span>
+          <span class="val orange" id="k-fan">—<span class="unit">%</span></span>
+        </div>
+        <div class="k-card">
+          <span class="lbl">Filter Life</span>
+          <span class="val green" id="k-filter">—<span class="unit">d</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top-right: Heatmiser zones -->
+    <div class="k-panel">
+      <div class="k-panel-title" id="heat-panel-title">Heatmiser UFH — Zone Temperatures</div>
+      <div class="k-zones" id="k-zones">
+        <div style="color:var(--muted);font-size:1vw">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Bottom-left: rotating chart -->
+    <div class="k-panel">
+      <div class="k-panel-title" id="chart-title">Temperatures — MVHR</div>
+      <div class="k-chart-wrap">
+        <canvas id="k-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Bottom-right: Heatmiser avg temps chart -->
+    <div class="k-panel">
+      <div class="k-panel-title">Heatmiser — Avg Floor &amp; Air Temp</div>
+      <div class="k-chart-wrap">
+        <canvas id="k-heat-chart"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="k-footer">
+    <div class="updated" id="k-updated">Last updated: —</div>
+    <div class="k-dots" id="k-dots"></div>
+    <div class="filter-warn" id="k-filter-warn"></div>
+  </div>
+
+</div>
+
+<script>
+// ── Chart defaults ────────────────────────────────────────────────────────────
+Chart.defaults.color = '#5a6a7a';
+Chart.defaults.borderColor = '#1e2530';
+Chart.defaults.font.family = "'DM Mono', monospace";
+Chart.defaults.font.size = 10;
+
+const C = {
+  blue:   '#58a6ff',
+  green:  '#3fb950',
+  orange: '#e09120',
+  teal:   '#39d0c4',
+  purple: '#bc8cff',
+  muted:  '#5a6a7a',
+  red:    '#f85149',
+};
+
+function ds(label, color, data) {
+  return {
+    label, data,
+    borderColor: color,
+    backgroundColor: color + '15',
+    borderWidth: 2,
+    pointRadius: 0,
+    tension: 0.3,
+    fill: false,
+  };
+}
+
+function chartOpts(yLabel) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 10, padding: 20, font: { size: 11 } } },
+      tooltip: { enabled: false },
+    },
+    scales: {
+      x: { ticks: { maxTicksLimit: 6, maxRotation: 0, font: { size: 11 } }, grid: { color: '#1e2530' } },
+      y: { title: { display: !!yLabel, text: yLabel, font: { size: 11 } }, grid: { color: '#1e2530' } },
+    },
+    animation: { duration: 400 },
+  };
+}
+
+const mainChart = new Chart(document.getElementById('k-chart'), {
+  type: 'line',
+  data: { labels: [], datasets: [] },
+  options: chartOpts('°C'),
+});
+
+const heatChart = new Chart(document.getElementById('k-heat-chart'), {
+  type: 'line',
+  data: { labels: [], datasets: [] },
+  options: chartOpts('°C'),
+});
+
+// ── Rotating charts config ────────────────────────────────────────────────────
+const CHART_VIEWS = [
+  {
+    title: 'Temperatures — MVHR',
+    build: (z) => ({
+      labels: z.map(r => fmtTs(r.ts)),
+      datasets: [
+        ds('Supply',  C.blue,   z.map(r => r.supply_temp)),
+        ds('Inside',  C.teal,   z.map(r => r.extract_temp)),
+        ds('Exhaust', C.muted,  z.map(r => r.exhaust_temp)),
+        ds('Outdoor', C.green,  z.map(r => r.outdoor_temp)),
+      ]
+    }),
+    yLabel: '°C',
+  },
+  {
+    title: 'Humidity — Supply & Inside',
+    build: (z) => ({
+      labels: z.map(r => fmtTs(r.ts)),
+      datasets: [
+        ds('Supply RH',  C.blue,   z.map(r => r.supply_humidity)),
+        ds('Inside RH',  C.purple, z.map(r => r.extract_humidity)),
+      ]
+    }),
+    yLabel: '%',
+  },
+  {
+    title: 'HRV Heat Recovery Efficiency',
+    build: (z) => ({
+      labels: z.map(r => fmtTs(r.ts)),
+      datasets: [
+        ds('Efficiency %', C.green, z.map(r => r.efficiency)),
+      ]
+    }),
+    yLabel: '%',
+  },
+  {
+    title: 'Fan Speed — % Duty',
+    build: (z) => ({
+      labels: z.map(r => fmtTs(r.ts)),
+      datasets: [
+        ds('Supply %',  C.orange, z.map(r => r.supply_fan_pct)),
+        ds('Extract %', C.red,    z.map(r => r.extract_fan_pct)),
+      ]
+    }),
+    yLabel: '%',
+  },
+];
+
+let chartIdx = 0;
+let zData = [], hData = [], zonesData = [];
+
+// ── Dots ──────────────────────────────────────────────────────────────────────
+function buildDots() {
+  const el = document.getElementById('k-dots');
+  el.innerHTML = CHART_VIEWS.map((_, i) =>
+    `<div class="k-dot ${i === chartIdx ? 'active' : ''}" id="dot-${i}"></div>`
+  ).join('');
+}
+
+function updateDots() {
+  CHART_VIEWS.forEach((_, i) => {
+    const d = document.getElementById(`dot-${i}`);
+    if (d) d.className = 'k-dot' + (i === chartIdx ? ' active' : '');
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtTs(ts) {
+  return new Date(ts + 'Z').toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function setVal(id, val, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (val == null) { el.innerHTML = '—'; return; }
+  const unitEl = el.querySelector('.unit');
+  const unitHtml = unitEl ? unitEl.outerHTML : '';
+  el.innerHTML = val + unitHtml;
+  if (cls) el.className = 'val ' + cls;
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('k-clock').textContent =
+    new Date().toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderMainChart() {
+  const view = CHART_VIEWS[chartIdx];
+  document.getElementById('chart-title').textContent = view.title;
+  const built = view.build(zData);
+  mainChart.data.labels = built.labels;
+  mainChart.data.datasets = built.datasets;
+  mainChart.options.scales.y.title.text = view.yLabel;
+  mainChart.update('none');
+  updateDots();
+}
+
+function renderHeatChart() {
+  heatChart.data.labels = hData.map(r => fmtTs(r.ts));
+  heatChart.data.datasets = [
+    ds('Avg Floor', C.red,    hData.map(r => r.avg_floor_temp)),
+    ds('Avg Air',   C.orange, hData.map(r => r.avg_air_temp)),
+  ];
+  heatChart.update('none');
+}
+
+function renderZones() {
+  const el = document.getElementById('k-zones');
+  if (!zonesData.length) { el.innerHTML = '<div style="color:var(--muted)">No data</div>'; return; }
+
+  el.innerHTML = zonesData.map(z => {
+    const isMaster = z.thermostat === 'Living Room';
+    return `
+      <div class="k-zone-row">
+        <div class="k-zone-name">
+          ${z.thermostat}
+          ${isMaster ? '<span class="master-tag">(master)</span>' : ''}
+        </div>
+        <div class="k-zone-temps">
+          <div class="k-zone-temp">
+            <span class="t-lbl">Floor</span>
+            <span class="t-val" style="color:var(--red)">${z.floor_temp?.toFixed(1) ?? '—'}°</span>
+          </div>
+          <div class="k-zone-temp">
+            <span class="t-lbl">Air</span>
+            <span class="t-val" style="color:var(--orange)">${z.air_temp?.toFixed(1) ?? '—'}°</span>
+          </div>
+        </div>
+        ${isMaster ? `<span class="cfh-badge ${z.heating_on ? 'active' : 'idle'}">${z.heating_on ? 'CALLING' : 'IDLE'}</span>` : '<span></span>'}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderLiveCards(lz, lh) {
+  if (lz) {
+    setVal('k-supply-temp',  lz.supply_temp?.toFixed(1),     'blue');
+    setVal('k-extract-temp', lz.extract_temp?.toFixed(1),    'teal');
+    setVal('k-outdoor-temp', lz.outdoor_temp?.toFixed(1),    'muted');
+    setVal('k-supply-rh',    lz.supply_humidity?.toFixed(0), 'blue');
+    setVal('k-extract-rh',   lz.extract_humidity?.toFixed(0),'purple');
+    setVal('k-fan',          lz.supply_fan_pct?.toFixed(0),  'orange');
+
+    // Efficiency colour
+    const eff = lz.efficiency;
+    const effCls = eff == null ? 'muted' : eff >= 85 ? 'green' : eff >= 70 ? 'orange' : 'red';
+    setVal('k-efficiency', eff?.toFixed(1), effCls);
+
+    // Filter
+    const fd = lz.filter_days;
+    const fdCls = fd == null ? 'muted' : fd > 30 ? 'green' : fd > 14 ? 'orange' : 'red';
+    setVal('k-filter', fd, fdCls);
+
+    // Filter warning in footer
+    const warn = document.getElementById('k-filter-warn');
+    if (fd != null && fd <= 30) {
+      warn.textContent = `⚠ Filter replacement in ${fd} days`;
+      warn.style.color = fd <= 14 ? 'var(--red)' : 'var(--orange)';
+    } else {
+      warn.textContent = '';
+    }
+  }
+
+  if (lh) {
+    const cfh = lh.call_for_heat === 1;
+    document.getElementById('k-status').textContent =
+      `UFH: ${cfh ? '🔴 CALLING' : '⚪ IDLE'}`;
+    document.getElementById('k-status').style.color = cfh ? 'var(--green)' : 'var(--muted)';
+  }
+}
+
+// ── Fetch & refresh ───────────────────────────────────────────────────────────
+async function refresh() {
+  try {
+    const [zRaw, hRaw, zonesRaw, latestRaw] = await Promise.all([
+      fetch('/api/zehnder?hours=24').then(r => r.json()),
+      fetch('/api/heatmiser/avg?hours=24').then(r => r.json()),
+      fetch('/api/heatmiser/zones').then(r => r.json()),
+      fetch('/api/latest').then(r => r.json()),
+    ]);
+
+    zData     = zRaw;
+    hData     = hRaw;
+    zonesData = zonesRaw;
+
+    renderLiveCards(latestRaw.zehnder, latestRaw.heatmiser);
+    renderMainChart();
+    renderHeatChart();
+    renderZones();
+
+    document.getElementById('k-updated').textContent =
+      'Updated ' + new Date().toLocaleTimeString('en-NZ', { hour12: false });
+
+  } catch (e) {
+    console.error('Refresh error:', e);
+  }
+}
+
+// ── Chart rotation every 15s ──────────────────────────────────────────────────
+setInterval(() => {
+  chartIdx = (chartIdx + 1) % CHART_VIEWS.length;
+  renderMainChart();
+}, 15000);
+
+// ── Data refresh every 60s ────────────────────────────────────────────────────
+setInterval(refresh, 60000);
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+buildDots();
+refresh();
+</script>
+</body>
+</html>

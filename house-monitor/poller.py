@@ -11,8 +11,8 @@ import requests
 from datetime import datetime
 
 # ── Config ────────────────────────────────────────────────────────────────────
-HA_URL           = os.environ.get("HA_URL",        "http://supervisor/core").rstrip("/")
-HA_TOKEN         = os.environ.get("HA_TOKEN",      os.environ.get("SUPERVISOR_TOKEN", ""))
+HA_URL           = os.environ.get("HA_URL",        "http://homeassistant.local:8123").rstrip("/")
+HA_TOKEN         = os.environ.get("HA_TOKEN",      "")
 HEATMISER_IP     = os.environ.get("HEATMISER_IP",  "192.168.1.13")
 HEATMISER_PORT   = int(os.environ.get("HEATMISER_PORT", "4242"))
 POLL_INTERVAL    = int(os.environ.get("POLL_INTERVAL", "60"))
@@ -90,7 +90,24 @@ def init_db(path: str) -> sqlite3.Connection:
             call_for_heat   INTEGER
         )
     """)
+
+    # ── Auto-migrate: add any missing columns ─────────────────────────────────
+    migrations = [
+        ("zehnder",       "efficiency",    "ALTER TABLE zehnder ADD COLUMN efficiency REAL"),
+        ("zehnder",       "filter_days",   "ALTER TABLE zehnder ADD COLUMN filter_days INTEGER"),
+        ("heatmiser_avg", "call_for_heat", "ALTER TABLE heatmiser_avg ADD COLUMN call_for_heat INTEGER"),
+    ]
+    existing = {}
+    for table, col, sql in migrations:
+        if table not in existing:
+            existing[table] = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if col not in existing[table]:
+            conn.execute(sql)
+            log.info(f"DB migration: added {table}.{col}")
+            existing[table].add(col)
+
     conn.commit()
+    return conn
     return conn
 
 
