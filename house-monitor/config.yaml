@@ -1,6 +1,6 @@
 name: "House Monitor"
 description: "Live dashboard for Zehnder ComfoAir Q and Heatmiser Neostat — temps, humidity, HRV efficiency and floor heating."
-version: "1.0.0"
+version: "1.0.2"
 slug: "house-monitor"
 init: false
 arch:
