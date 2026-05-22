@@ -50,8 +50,8 @@ HEATMISER_KEYWORDS = ["heatmiser", "neo", "neostat", "neohub"]
 
 # TankMate — Stockyard Tanks entity IDs
 TANK_ENTITIES = {
-    "current_volume":  "sensor.stockyard_tanks_current_volume",
-    "percent_full":    "sensor.stockyard_tanks_percent_full",
+    "current_volume":  "sensor.stockyard_tanks_current_volume_tankmate",
+    "percent_full":    "sensor.stockyard_tanks_percent_full_tankmate",
     "water_height":    "sensor.stockyard_tanks_water_height",
     "battery_voltage": "sensor.stockyard_tanks_battery_voltage",
 }
