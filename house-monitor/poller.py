@@ -11,12 +11,15 @@ import requests
 from datetime import datetime
 
 # ── Config ────────────────────────────────────────────────────────────────────
-HA_URL           = os.environ.get("HA_URL",        "http://homeassistant.local:8123").rstrip("/")
-HA_TOKEN         = os.environ.get("HA_TOKEN",      "")
-HEATMISER_IP     = os.environ.get("HEATMISER_IP",  "192.168.1.13")
-HEATMISER_PORT   = int(os.environ.get("HEATMISER_PORT", "4242"))
-POLL_INTERVAL    = int(os.environ.get("POLL_INTERVAL", "60"))
-DB_PATH          = os.environ.get("DB_PATH", "/data/monitor.db")
+HA_URL             = os.environ.get("HA_URL",             "http://homeassistant.local:8123").rstrip("/")
+HA_TOKEN           = os.environ.get("HA_TOKEN",           "")
+HEATMISER_IP       = os.environ.get("HEATMISER_IP",       "192.168.1.13")
+HEATMISER_PORT     = int(os.environ.get("HEATMISER_PORT", "4242"))
+POLL_INTERVAL      = int(os.environ.get("POLL_INTERVAL",  "60"))
+DB_PATH            = os.environ.get("DB_PATH",            "/data/monitor.db")
+ZEHNDER_DEVICE_ID  = os.environ.get("ZEHNDER_DEVICE_ID",  "comfoairq_stockyard")
+ZEHNDER_FAN_ENTITY = os.environ.get("ZEHNDER_FAN_ENTITY", "fan.comfoairq")
+TANK_DEVICE_ID     = os.environ.get("TANK_DEVICE_ID",     "")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,29 +32,31 @@ HEADERS = {
     "Content-Type": "application/json",
 }
 
-# ── Direct entity ID map (matched to your HA instance) ───────────────────────
-ZEHNDER_ENTITIES = {
-    "supply_temp":      "sensor.comfoairq_stockyard_supply_temperature",
-    "extract_temp":     "sensor.comfoairq_stockyard_inside_temperature",
-    "exhaust_temp":     "sensor.comfoairq_stockyard_exhaust_temperature",
-    "outdoor_temp":     "sensor.comfoairq_stockyard_outside_temperature",
-    "supply_humidity":  "sensor.comfoairq_stockyard_supply_humidity",
-    "extract_humidity": "sensor.comfoairq_stockyard_inside_humidity",
-    "exhaust_humidity": "sensor.comfoairq_stockyard_exhaust_humidity",
-    "outdoor_humidity": "sensor.comfoairq_stockyard_outside_humidity",
-    "bypass_state":     "sensor.comfoairq_stockyard_bypass_state",
-    "operating_mode":   "select.comfoairq_stockyard_ventilation_mode",
-    "fan_entity":       "fan.comfoairq",
-    "filter_days":      "sensor.comfoairq_stockyard_days_to_replace_filter",
-}
+# ── Entity ID maps — built from config at startup ─────────────────────────────
+def build_zehnder_entities(device_id: str, fan_entity: str) -> dict:
+    return {
+        "supply_temp":      f"sensor.{device_id}_supply_temperature",
+        "extract_temp":     f"sensor.{device_id}_inside_temperature",
+        "exhaust_temp":     f"sensor.{device_id}_exhaust_temperature",
+        "outdoor_temp":     f"sensor.{device_id}_outside_temperature",
+        "supply_humidity":  f"sensor.{device_id}_supply_humidity",
+        "extract_humidity": f"sensor.{device_id}_inside_humidity",
+        "exhaust_humidity": f"sensor.{device_id}_exhaust_humidity",
+        "outdoor_humidity": f"sensor.{device_id}_outside_humidity",
+        "bypass_state":     f"sensor.{device_id}_bypass_state",
+        "operating_mode":   f"select.{device_id}_ventilation_mode",
+        "fan_entity":       fan_entity,
+        "filter_days":      f"sensor.{device_id}_days_to_replace_filter",
+    }
 
-# TankMate — Stockyard Tanks entity IDs
-TANK_ENTITIES = {
-    "current_volume":  "sensor.stockyard_tanks_current_volume_tankmate",
-    "percent_full":    "sensor.stockyard_tanks_percent_full_tankmate",
-    "water_height":    "sensor.stockyard_tanks_water_height",
-    "battery_voltage": "sensor.stockyard_tanks_battery_voltage",
-}
+
+def build_tank_entities(device_id: str) -> dict:
+    return {
+        "current_volume":  f"sensor.{device_id}_current_volume_tankmate",
+        "percent_full":    f"sensor.{device_id}_percent_full_tankmate",
+        "water_height":    f"sensor.{device_id}_water_height",
+        "battery_voltage": f"sensor.{device_id}_battery_voltage",
+    }
 
 # ── Database setup ─────────────────────────────────────────────────────────────
 def init_db(path: str) -> sqlite3.Connection:
@@ -151,7 +156,7 @@ def safe_float(val) -> float | None:
 
 # ── Entity discovery ───────────────────────────────────────────────────────────
 def discover_entities(states: list[dict]) -> dict:
-    return dict(ZEHNDER_ENTITIES)
+    return build_zehnder_entities(ZEHNDER_DEVICE_ID, ZEHNDER_FAN_ENTITY)
 
 
 def log_discovered(entity_map: dict):
@@ -302,20 +307,24 @@ def poll_heatmiser() -> tuple[list[dict], dict | None]:
 
 # ── Tank polling ──────────────────────────────────────────────────────────────
 def poll_tank(states_by_id: dict) -> dict | None:
+    if not TANK_DEVICE_ID:
+        return None
     try:
+        entities = build_tank_entities(TANK_DEVICE_ID)
+
         def val(entity_id):
             s = states_by_id.get(entity_id, {}).get("state")
             return safe_float(s) if s not in (None, "unavailable", "unknown") else None
 
         result = {
-            "current_volume":  val(TANK_ENTITIES["current_volume"]),
-            "percent_full":    val(TANK_ENTITIES["percent_full"]),
-            "water_height":    val(TANK_ENTITIES["water_height"]),
-            "battery_voltage": val(TANK_ENTITIES["battery_voltage"]),
+            "current_volume":  val(entities["current_volume"]),
+            "percent_full":    val(entities["percent_full"]),
+            "water_height":    val(entities["water_height"]),
+            "battery_voltage": val(entities["battery_voltage"]),
         }
 
         if result["current_volume"] is None and result["percent_full"] is None:
-            log.warning("Tank: no data available — check entity IDs")
+            log.warning("Tank: no data available — check tank_device_id in config")
             return None
 
         return result

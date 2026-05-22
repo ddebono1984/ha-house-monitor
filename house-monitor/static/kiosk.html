@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>6 Stockyard — House Monitor</title>
+<title>House Monitor</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -273,7 +273,7 @@
 
   <!-- Header -->
   <div class="k-header">
-    <div class="title">6 Stockyard Lane &nbsp;·&nbsp; House Monitor</div>
+    <div class="title" id="k-house-name">House Monitor</div>
     <div class="time" id="k-clock">—</div>
     <div style="display:flex;gap:2vw;align-items:center">
       <div class="status" id="k-tank-status" style="font-family:'DM Mono',monospace;font-size:0.8vw;color:var(--muted)">—</div>
@@ -675,6 +675,13 @@ setInterval(() => {
 setInterval(refresh, 60000);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+fetch(apiUrl('/api/config')).then(r => r.json()).then(cfg => {
+  if (cfg.house_name) {
+    document.getElementById('k-house-name').textContent = cfg.house_name;
+    document.title = cfg.house_name + ' — House Monitor';
+  }
+});
+
 buildDots();
 refresh();
 </script>

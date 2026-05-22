@@ -1,6 +1,6 @@
 name: "House Monitor"
 description: "Live dashboard for Zehnder ComfoAir Q, Heatmiser Neostat and TankMate water tanks — temps, humidity, HRV efficiency, floor heating and tank levels."
-version: "1.0.6"
+version: "1.0.7"
 slug: "house-monitor"
 init: false
 arch:
@@ -17,14 +17,22 @@ ports_description:
   5000/tcp: "Web dashboard"
 
 options:
+  house_name: "My Home"
   heatmiser_ip: "192.168.1.13"
   heatmiser_port: 4242
   poll_interval: 60
+  zehnder_device_id: "comfoairq_stockyard"
+  zehnder_fan_entity: "fan.comfoairq"
+  tank_device_id: "stockyard_tanks"
 
 schema:
+  house_name: str
   heatmiser_ip: str
   heatmiser_port: int
   poll_interval: int
+  zehnder_device_id: str
+  zehnder_fan_entity: str
+  tank_device_id: str?
 
 panel_icon: "mdi:home-thermometer"
 panel_title: "House Monitor"

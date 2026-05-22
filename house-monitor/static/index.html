@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>6 Stockyard — House Monitor</title>
+<title>House Monitor</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;400;500&display=swap" rel="stylesheet">
@@ -200,7 +200,7 @@
 
 <header>
   <h1>House Monitor</h1>
-  <span class="sub">6 Stockyard Lane · Queenstown</span>
+  <span class="sub" id="house-name"></span>
   <div class="range-pills">
     <button onclick="setRange(6)"   data-h="6">6h</button>
     <button onclick="setRange(24)"  data-h="24" class="active">24h</button>
@@ -566,6 +566,15 @@ function setRange(hours) {
   });
   refresh();
 }
+
+// Load house name once
+fetch(apiUrl('/api/config')).then(r => r.json()).then(cfg => {
+  const el = document.getElementById('house-name');
+  if (el && cfg.house_name) {
+    el.textContent = cfg.house_name;
+    document.title = cfg.house_name + ' — House Monitor';
+  }
+});
 
 // Initial load + auto-refresh every 60s
 refresh();

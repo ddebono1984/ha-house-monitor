@@ -7,7 +7,8 @@ import os
 import sqlite3
 from flask import Flask, jsonify, send_from_directory, request
 
-DB_PATH = os.environ.get("DB_PATH", "/data/monitor.db")
+DB_PATH    = os.environ.get("DB_PATH",     "/data/monitor.db")
+HOUSE_NAME = os.environ.get("HOUSE_NAME", "House Monitor")
 
 app = Flask(__name__, static_folder="static")
 
@@ -24,6 +25,11 @@ def hours_ago(h: int) -> str:
 
 
 # ── API endpoints ─────────────────────────────────────────────────────────────
+
+@app.get("/api/config")
+def api_config():
+    return jsonify({"house_name": HOUSE_NAME})
+
 
 @app.get("/api/zehnder")
 def api_zehnder():
