@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>6 Stockyard — House Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --border:    #21262d;
+    --muted:     #8b949e;
+    --text:      #e6edf3;
+    --accent:    #58a6ff;
+    --green:     #3fb950;
+    --orange:    #d29922;
+    --red:       #f85149;
+    --teal:      #39d0c4;
+    --purple:    #bc8cff;
+    --chart-grid:#21262d;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 400;
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  header h1 {
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+
+  header .sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  .range-pills {
+    margin-left: auto;
+    display: flex;
+    gap: 0.35rem;
+  }
+
+  .range-pills button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .range-pills button:hover,
+  .range-pills button.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+  }
+
+  .live-bar {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    flex-wrap: wrap;
+  }
+
+  .live-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 100px;
+  }
+
+  .live-card .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .live-card .value {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.35rem;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .live-card .value.--blue   { color: var(--accent); }
+  .live-card .value.--green  { color: var(--green); }
+  .live-card .value.--orange { color: var(--orange); }
+  .live-card .value.--teal   { color: var(--teal); }
+  .live-card .value.--purple { color: var(--purple); }
+  .live-card .value.--red    { color: var(--red); }
+
+  .separator {
+    width: 1px;
+    background: var(--border);
+    align-self: stretch;
+    flex-shrink: 0;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    flex: 1;
+  }
+
+  .panel {
+    background: var(--bg);
+    padding: 1.5rem 1.75rem;
+  }
+
+  .panel-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 1.25rem;
+  }
+
+  .chart-wrap {
+    position: relative;
+    height: 200px;
+  }
+
+  .zones-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+  }
+
+  .zones-table th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 400;
+    padding: 0 0 0.6rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .zones-table td {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .zones-table tr:last-child td { border-bottom: none; }
+
+  .dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  .dot.on  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.off { background: var(--border); }
+
+  #last-updated {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    padding: 0.75rem 2rem;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>House Monitor</h1>
+  <span class="sub">6 Stockyard Lane · Queenstown</span>
+  <div class="range-pills">
+    <button onclick="setRange(6)"   data-h="6">6h</button>
+    <button onclick="setRange(24)"  data-h="24" class="active">24h</button>
+    <button onclick="setRange(72)"  data-h="72">3d</button>
+    <button onclick="setRange(168)" data-h="168">7d</button>
+  </div>
+</header>
+
+<!-- Live cards -->
+<div class="live-bar" id="live-bar">
+  <div class="live-card">
+    <span class="label">Supply Temp</span>
+    <span class="value --blue"  id="lv-supply-temp">—</span>
+  </div>
+  <div class="live-card">
+    <span class="label">Extract Temp</span>
+    <span class="value --green" id="lv-extract-temp">—</span>
+  </div>
+  <div class="live-card">
+    <span class="label">Outdoor Temp</span>
+    <span class="value --teal"  id="lv-outdoor-temp">—</span>
+  </div>
+  <div class="separator"></div>
+  <div class="live-card">
+    <span class="label">Supply RH</span>
+    <span class="value --blue"  id="lv-supply-rh">—</span>
+  </div>
+  <div class="live-card">
+    <span class="label">Extract RH</span>
+    <span class="value --purple" id="lv-extract-rh">—</span>
+  </div>
+  <div class="separator"></div>
+  <div class="live-card">
+    <span class="label">HRV Efficiency</span>
+    <span class="value --green" id="lv-efficiency">—</span>
+  </div>
+  <div class="live-card">
+    <span class="label">Fan Speed</span>
+    <span class="value --orange" id="lv-supply-fan">—</span>
+  </div>
+  <div class="live-card">
+    <span class="label">Filter Life</span>
+    <span class="value" id="lv-filter">—</span>
+  </div>
+  <div class="separator"></div>
+  <div class="live-card">
+    <span class="label">Avg Floor Temp</span>
+    <span class="value --red"   id="lv-floor-temp">—</span>
+  </div>
+  <div class="live-card">
+    <span class="label">Call for Heat</span>
+    <span class="value" id="lv-call-heat">—</span>
+  </div>
+</div>
+
+<!-- Charts -->
+<div class="grid">
+
+  <div class="panel">
+    <div class="panel-title">Temperatures — MVHR</div>
+    <div class="chart-wrap"><canvas id="chart-temps"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Heatmiser — Average Floor &amp; Air Temp</div>
+    <div class="chart-wrap"><canvas id="chart-heatmiser"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Humidity — Supply &amp; Extract</div>
+    <div class="chart-wrap"><canvas id="chart-humidity"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Fan Speed — % Duty</div>
+    <div class="chart-wrap"><canvas id="chart-fans-pct"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">HRV Heat Recovery Efficiency</div>
+    <div class="chart-wrap"><canvas id="chart-efficiency"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Heatmiser — Zone Status (latest)</div>
+    <table class="zones-table">
+      <thead>
+        <tr>
+          <th>Zone</th>
+          <th>Floor °C</th>
+          <th>Air °C</th>
+        </tr>
+      </thead>
+      <tbody id="zones-body">
+        <tr><td colspan="5" style="color:var(--muted);padding-top:1rem">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div id="last-updated">Last updated: —</div>
+
+<script>
+// ── Chart defaults ──────────────────────────────────────────────────────────
+Chart.defaults.color = '#8b949e';
+Chart.defaults.borderColor = '#21262d';
+Chart.defaults.font.family = "'DM Mono', monospace";
+Chart.defaults.font.size = 11;
+
+const COLORS = {
+  blue:   '#58a6ff',
+  green:  '#3fb950',
+  orange: '#d29922',
+  red:    '#f85149',
+  teal:   '#39d0c4',
+  purple: '#bc8cff',
+  muted:  '#8b949e',
+};
+
+function makeDataset(label, color, data) {
+  return {
+    label,
+    data,
+    borderColor: color,
+    backgroundColor: color + '18',
+    borderWidth: 1.5,
+    pointRadius: 0,
+    tension: 0.3,
+    fill: false,
+  };
+}
+
+function chartOpts(yLabel = '') {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 10, padding: 16 } },
+      tooltip: { bodyFont: { family: "'DM Mono', monospace", size: 11 } },
+    },
+    scales: {
+      x: {
+        type: 'category',
+        ticks: { maxTicksLimit: 8, maxRotation: 0 },
+        grid: { color: '#21262d' },
+      },
+      y: {
+        title: { display: !!yLabel, text: yLabel },
+        grid: { color: '#21262d' },
+      },
+    },
+  };
+}
+
+// Initialise charts
+const charts = {
+  temps:      new Chart(document.getElementById('chart-temps'),      { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('°C') }),
+  humidity:   new Chart(document.getElementById('chart-humidity'),   { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('%') }),
+  fansPct:    new Chart(document.getElementById('chart-fans-pct'),   { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('%') }),
+  efficiency: new Chart(document.getElementById('chart-efficiency'), { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('%') }),
+  heatmiser:  new Chart(document.getElementById('chart-heatmiser'),  { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('°C') }),
+};
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function fmtTs(ts) {
+  const d = new Date(ts + 'Z');
+  return d.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function updateChart(chart, labels, ...datasets) {
+  chart.data.labels = labels;
+  chart.data.datasets = datasets;
+  chart.update('none');
+}
+
+function setLive(id, val, unit = '') {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val != null ? `${val}${unit}` : '—';
+}
+
+// ── Data fetch ───────────────────────────────────────────────────────────────
+let currentHours = 24;
+
+async function refresh() {
+  try {
+    const [zRaw, hRaw, zonesRaw, latestRaw] = await Promise.all([
+      fetch(`/api/zehnder?hours=${currentHours}`).then(r => r.json()),
+      fetch(`/api/heatmiser/avg?hours=${currentHours}`).then(r => r.json()),
+      fetch('/api/heatmiser/zones').then(r => r.json()),
+      fetch('/api/latest').then(r => r.json()),
+    ]);
+
+    // ── Live cards
+    const lz = latestRaw.zehnder;
+    const lh = latestRaw.heatmiser;
+    if (lz) {
+      setLive('lv-supply-temp',  lz.supply_temp?.toFixed(1),  '°C');
+      setLive('lv-extract-temp', lz.extract_temp?.toFixed(1), '°C');
+      setLive('lv-outdoor-temp', lz.outdoor_temp?.toFixed(1), '°C');
+      setLive('lv-supply-rh',    lz.supply_humidity?.toFixed(0), '%');
+      setLive('lv-extract-rh',   lz.extract_humidity?.toFixed(0), '%');
+      setLive('lv-supply-fan',   lz.supply_fan_pct?.toFixed(0), '%');
+
+      // Efficiency card — colour by value
+      const effEl = document.getElementById('lv-efficiency');
+      if (effEl) {
+        if (lz.efficiency != null) {
+          effEl.textContent = lz.efficiency.toFixed(1) + '%';
+          effEl.className = 'value ' + (lz.efficiency >= 85 ? '--green' : lz.efficiency >= 70 ? '--orange' : '--red');
+        } else {
+          effEl.textContent = '—';
+          effEl.className = 'value --muted';
+        }
+      }
+
+      // Filter days — warn if under 30
+      const filtEl = document.getElementById('lv-filter');
+      if (filtEl && lz.filter_days != null) {
+        filtEl.textContent = lz.filter_days + 'd';
+        filtEl.className = 'value ' + (lz.filter_days > 30 ? '--green' : lz.filter_days > 14 ? '--orange' : '--red');
+      }
+    }
+    if (lh) {
+      setLive('lv-floor-temp', lh.avg_floor_temp?.toFixed(1), '°C');
+      const cfhEl = document.getElementById('lv-call-heat');
+      if (cfhEl) {
+        const on = lh.call_for_heat === 1;
+        cfhEl.textContent = on ? 'ACTIVE' : 'IDLE';
+        cfhEl.className = 'value ' + (on ? '--green' : '--muted');
+      }
+    }
+
+    // ── MVHR Temps chart
+    const zLabels = zRaw.map(r => fmtTs(r.ts));
+    updateChart(charts.temps, zLabels,
+      makeDataset('Supply',  COLORS.blue,   zRaw.map(r => r.supply_temp)),
+      makeDataset('Extract', COLORS.green,  zRaw.map(r => r.extract_temp)),
+      makeDataset('Exhaust', COLORS.muted,  zRaw.map(r => r.exhaust_temp)),
+      makeDataset('Outdoor', COLORS.teal,   zRaw.map(r => r.outdoor_temp)),
+    );
+
+    // ── Humidity chart
+    updateChart(charts.humidity, zLabels,
+      makeDataset('Supply RH',  COLORS.blue,   zRaw.map(r => r.supply_humidity)),
+      makeDataset('Extract RH', COLORS.purple, zRaw.map(r => r.extract_humidity)),
+    );
+
+    // ── Fan % chart
+    updateChart(charts.fansPct, zLabels,
+      makeDataset('Supply %',  COLORS.orange, zRaw.map(r => r.supply_fan_pct)),
+      makeDataset('Extract %', COLORS.red,    zRaw.map(r => r.extract_fan_pct)),
+    );
+
+    // ── Efficiency chart
+    updateChart(charts.efficiency, zLabels,
+      makeDataset('HRV Efficiency %', COLORS.green, zRaw.map(r => r.efficiency)),
+    );
+
+    // ── Heatmiser chart
+    const hLabels = hRaw.map(r => fmtTs(r.ts));
+    updateChart(charts.heatmiser, hLabels,
+      makeDataset('Avg Floor Temp', COLORS.red,   hRaw.map(r => r.avg_floor_temp)),
+      makeDataset('Avg Air Temp',   COLORS.orange, hRaw.map(r => r.avg_air_temp)),
+    );
+
+    // ── Zones table
+    const tbody = document.getElementById('zones-body');
+    if (zonesRaw.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">No zone data</td></tr>';
+    } else {
+      tbody.innerHTML = zonesRaw.map(z => {
+        const ismaster = z.thermostat === 'Living Room';
+        const label = ismaster
+          ? `${z.thermostat} <span style="font-size:0.6rem;color:var(--muted)">(master)</span>`
+          : z.thermostat;
+        return `
+        <tr>
+          <td>${label}</td>
+          <td>${z.floor_temp?.toFixed(1) ?? '—'}</td>
+          <td>${z.air_temp?.toFixed(1)   ?? '—'}</td>
+        </tr>
+      `}).join('');
+    }
+
+    document.getElementById('last-updated').textContent =
+      'Last updated: ' + new Date().toLocaleTimeString('en-NZ', { hour12: false });
+
+  } catch (err) {
+    console.error('Refresh error:', err);
+  }
+}
+
+function setRange(hours) {
+  currentHours = hours;
+  document.querySelectorAll('.range-pills button').forEach(b => {
+    b.classList.toggle('active', +b.dataset.h === hours);
+  });
+  refresh();
+}
+
+// Initial load + auto-refresh every 60s
+refresh();
+setInterval(refresh, 60_000);
+</script>
+</body>
+</html>

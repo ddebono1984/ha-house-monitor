@@ -1,0 +1,32 @@
+name: "House Monitor"
+description: "Live dashboard for Zehnder ComfoAir Q and Heatmiser Neostat — temps, humidity, HRV efficiency and floor heating."
+version: "1.0.0"
+slug: "house-monitor"
+init: false
+arch:
+  - aarch64
+  - amd64
+  - armv7
+
+homeassistant_api: true
+
+ports:
+  5000/tcp: 5000
+
+ports_description:
+  5000/tcp: "Web dashboard"
+
+options:
+  heatmiser_ip: "192.168.1.13"
+  heatmiser_port: 4242
+  poll_interval: 60
+
+schema:
+  heatmiser_ip: str
+  heatmiser_port: int
+  poll_interval: int
+
+panel_icon: "mdi:home-thermometer"
+panel_title: "House Monitor"
+ingress: true
+ingress_port: 5000
