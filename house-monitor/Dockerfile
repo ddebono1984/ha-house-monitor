@@ -9,7 +9,6 @@ COPY poller.py app.py run.sh ./
 COPY static/ ./static/
 
 RUN chmod +x run.sh
-
 RUN mkdir -p /data
 
 CMD ["/app/run.sh"]
