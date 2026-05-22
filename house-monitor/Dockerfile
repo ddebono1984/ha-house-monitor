@@ -10,7 +10,6 @@ COPY static/ ./static/
 
 RUN chmod +x run.sh
 
-DATA_DIR=/data
 RUN mkdir -p /data
 
 CMD ["/app/run.sh"]
