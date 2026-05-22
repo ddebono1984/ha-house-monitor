@@ -353,7 +353,10 @@
   <div class="k-footer">
     <div class="updated" id="k-updated">Last updated: —</div>
     <div class="k-dots" id="k-dots"></div>
-    <div class="filter-warn" id="k-filter-warn"></div>
+    <div style="display:flex;gap:2vw">
+      <div class="filter-warn" id="k-filter-warn"></div>
+      <div class="filter-warn" id="k-tank-warn"></div>
+    </div>
   </div>
 
 </div>
@@ -565,7 +568,7 @@ function renderZones() {
   }).join('');
 }
 
-function renderLiveCards(lz, lh) {
+function renderLiveCards(lz, lh, latestRaw) {
   if (lz) {
     setVal('k-supply-temp',  lz.supply_temp?.toFixed(1),     'blue');
     setVal('k-extract-temp', lz.extract_temp?.toFixed(1),    'teal');
@@ -600,6 +603,19 @@ function renderLiveCards(lz, lh) {
       `UFH: ${cfh ? '🔴 CALLING' : '⚪ IDLE'}`;
     document.getElementById('k-status').style.color = cfh ? 'var(--green)' : 'var(--muted)';
   }
+
+  // Tank warning in footer
+  const tankWarnEl = document.getElementById('k-tank-warn');
+  if (tankWarnEl) {
+    const lt = latestRaw && latestRaw.tank;
+    if (lt && lt.percent_full != null && lt.percent_full < 20) {
+      const pct = lt.percent_full;
+      tankWarnEl.textContent = `⚠ Tank low: ${pct.toFixed(0)}%`;
+      tankWarnEl.style.color = pct < 10 ? 'var(--red)' : 'var(--orange)';
+    } else {
+      tankWarnEl.textContent = '';
+    }
+  }
 }
 
 // ── Fetch & refresh ───────────────────────────────────────────────────────────
@@ -623,7 +639,7 @@ async function refresh() {
     zonesData = zonesRaw;
     tData     = tRaw;
 
-    renderLiveCards(latestRaw.zehnder, latestRaw.heatmiser);
+    renderLiveCards(latestRaw.zehnder, latestRaw.heatmiser, latestRaw);
     renderMainChart();
     renderHeatChart();
     renderZones();

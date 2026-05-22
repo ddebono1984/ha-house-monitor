@@ -45,9 +45,6 @@ ZEHNDER_ENTITIES = {
     "filter_days":      "sensor.comfoairq_stockyard_days_to_replace_filter",
 }
 
-# Heatmiser keywords — update once we know the entity names
-HEATMISER_KEYWORDS = ["heatmiser", "neo", "neostat", "neohub"]
-
 # TankMate — Stockyard Tanks entity IDs
 TANK_ENTITIES = {
     "current_volume":  "sensor.stockyard_tanks_current_volume_tankmate",
@@ -154,41 +151,13 @@ def safe_float(val) -> float | None:
 
 # ── Entity discovery ───────────────────────────────────────────────────────────
 def discover_entities(states: list[dict]) -> dict:
-    """
-    Build entity map using direct Zehnder IDs + keyword search for Heatmiser.
-    """
-    entity_map = dict(ZEHNDER_ENTITIES)
-
-    # Heatmiser — search by keywords
-    neo_climate = [
-        s for s in states
-        if s["entity_id"].startswith("climate.")
-        and any(k in s["entity_id"].lower() for k in HEATMISER_KEYWORDS)
-    ]
-    neo_sensors = [
-        s for s in states
-        if s["entity_id"].startswith("sensor.")
-        and any(k in s["entity_id"].lower() for k in HEATMISER_KEYWORDS)
-    ]
-
-    # If still nothing, print ALL climate entities to help identify them
-    if not neo_climate:
-        all_climate = [s["entity_id"] for s in states if s["entity_id"].startswith("climate.")]
-        log.warning(f"No Heatmiser climate entities found. All climate entities: {all_climate}")
-
-    entity_map["_neo_climate"] = [s["entity_id"] for s in neo_climate]
-    entity_map["_neo_sensors"] = [s["entity_id"] for s in neo_sensors]
-
-    return entity_map
+    return dict(ZEHNDER_ENTITIES)
 
 
 def log_discovered(entity_map: dict):
     log.info("=== Discovered entities ===")
     for k, v in entity_map.items():
-        if not k.startswith("_"):
-            log.info(f"  {k:25s} → {v}")
-    log.info(f"  Neo climate zones   → {entity_map.get('_neo_climate', [])}")
-    log.info(f"  Neo sensors         → {entity_map.get('_neo_sensors', [])}")
+        log.info(f"  {k:25s} → {v}")
     log.info("===========================")
 
 

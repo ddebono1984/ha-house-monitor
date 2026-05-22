@@ -273,6 +273,9 @@
   </div>
 </div>
 
+<!-- Warning banner -->
+<div id="tank-warn-bar" style="display:none;padding:0.6rem 2rem;border-bottom:1px solid;font-family:'DM Mono',monospace;font-size:0.75rem"></div>
+
 <!-- Charts -->
 <div class="grid">
 
@@ -517,8 +520,9 @@ async function refresh() {
       `}).join('');
     }
 
-    // ── Tank live cards
+    // ── Tank live cards + low-tank warning banner
     const lt = latestRaw.tank;
+    const warnBar = document.getElementById('tank-warn-bar');
     if (lt) {
       const pct = lt.percent_full;
       const pctEl = document.getElementById('lv-tank-pct');
@@ -529,6 +533,16 @@ async function refresh() {
       setLive('lv-tank-vol',    lt.current_volume != null ? Math.round(lt.current_volume).toLocaleString() : null, 'L');
       setLive('lv-tank-height', lt.water_height?.toFixed(2), 'm');
       setLive('lv-tank-batt',   lt.battery_voltage?.toFixed(2), 'V');
+
+      if (pct != null && pct < 20) {
+        const low = pct < 10;
+        const col  = low ? 'var(--red)'    : 'var(--orange)';
+        const bg   = low ? 'rgba(248,81,73,0.07)' : 'rgba(210,153,34,0.07)';
+        warnBar.textContent = `⚠ Tank low — ${pct.toFixed(0)}% remaining (${Math.round(lt.current_volume).toLocaleString()} L)`;
+        warnBar.style.cssText = `display:block;padding:0.6rem 2rem;border-bottom:1px solid;font-family:'DM Mono',monospace;font-size:0.75rem;color:${col};background:${bg};border-color:${col}`;
+      } else {
+        warnBar.style.display = 'none';
+      }
     }
 
     // ── Tank chart
