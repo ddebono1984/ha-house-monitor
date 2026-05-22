@@ -275,7 +275,10 @@
   <div class="k-header">
     <div class="title">6 Stockyard Lane &nbsp;·&nbsp; House Monitor</div>
     <div class="time" id="k-clock">—</div>
-    <div class="status" id="k-status">—</div>
+    <div style="display:flex;gap:2vw;align-items:center">
+      <div class="status" id="k-tank-status" style="font-family:'DM Mono',monospace;font-size:0.8vw;color:var(--muted)">—</div>
+      <div class="status" id="k-status">—</div>
+    </div>
   </div>
 
   <!-- Body: 2×2 grid -->
@@ -460,10 +463,20 @@ const CHART_VIEWS = [
     }),
     yLabel: '%',
   },
+  {
+    title: 'Water Tank — Volume (Litres)',
+    build: (z, h, t) => ({
+      labels: t.map(r => fmtTs(r.ts)),
+      datasets: [
+        ds('Volume (L)', C.teal, t.map(r => r.current_volume)),
+      ]
+    }),
+    yLabel: 'L',
+  },
 ];
 
 let chartIdx = 0;
-let zData = [], hData = [], zonesData = [];
+let zData = [], hData = [], zonesData = [], tData = [];
 
 // ── Dots ──────────────────────────────────────────────────────────────────────
 function buildDots() {
@@ -507,7 +520,7 @@ updateClock();
 function renderMainChart() {
   const view = CHART_VIEWS[chartIdx];
   document.getElementById('chart-title').textContent = view.title;
-  const built = view.build(zData);
+  const built = view.build(zData, hData, tData);
   mainChart.data.labels = built.labels;
   mainChart.data.datasets = built.datasets;
   mainChart.options.scales.y.title.text = view.yLabel;
@@ -597,21 +610,36 @@ function apiUrl(path) {
 
 async function refresh() {
   try {
-    const [zRaw, hRaw, zonesRaw, latestRaw] = await Promise.all([
+    const [zRaw, hRaw, zonesRaw, latestRaw, tRaw] = await Promise.all([
       fetch(apiUrl('/api/zehnder?hours=24')).then(r => r.json()),
       fetch(apiUrl('/api/heatmiser/avg?hours=24')).then(r => r.json()),
       fetch(apiUrl('/api/heatmiser/zones')).then(r => r.json()),
       fetch(apiUrl('/api/latest')).then(r => r.json()),
+      fetch(apiUrl('/api/tank?hours=24')).then(r => r.json()),
     ]);
 
     zData     = zRaw;
     hData     = hRaw;
     zonesData = zonesRaw;
+    tData     = tRaw;
 
     renderLiveCards(latestRaw.zehnder, latestRaw.heatmiser);
     renderMainChart();
     renderHeatChart();
     renderZones();
+
+    // Tank level in header status
+    const lt = latestRaw.tank;
+    if (lt && lt.percent_full != null) {
+      const pct = lt.percent_full;
+      const pctColor = pct >= 70 ? 'var(--green)' : pct >= 30 ? 'var(--orange)' : 'var(--red)';
+      const volStr = lt.current_volume != null ? ` · ${Math.round(lt.current_volume).toLocaleString()}L` : '';
+      const tankEl = document.getElementById('k-tank-status');
+      if (tankEl) {
+        tankEl.textContent = `Tank: ${pct.toFixed(0)}%${volStr}`;
+        tankEl.style.color = pctColor;
+      }
+    }
 
     document.getElementById('k-updated').textContent =
       'Updated ' + new Date().toLocaleTimeString('en-NZ', { hour12: false });

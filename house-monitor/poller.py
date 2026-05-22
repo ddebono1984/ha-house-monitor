@@ -48,6 +48,14 @@ ZEHNDER_ENTITIES = {
 # Heatmiser keywords — update once we know the entity names
 HEATMISER_KEYWORDS = ["heatmiser", "neo", "neostat", "neohub"]
 
+# TankMate — Stockyard Tanks entity IDs
+TANK_ENTITIES = {
+    "current_volume":  "sensor.stockyard_tanks_current_volume",
+    "percent_full":    "sensor.stockyard_tanks_percent_full",
+    "water_height":    "sensor.stockyard_tanks_water_height",
+    "battery_voltage": "sensor.stockyard_tanks_battery_voltage",
+}
+
 # ── Database setup ─────────────────────────────────────────────────────────────
 def init_db(path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -90,6 +98,15 @@ def init_db(path: str) -> sqlite3.Connection:
             call_for_heat   INTEGER
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tank (
+            ts              TEXT PRIMARY KEY,
+            current_volume  REAL,
+            percent_full    REAL,
+            water_height    REAL,
+            battery_voltage REAL
+        )
+    """)
 
     # ── Auto-migrate: add any missing columns ─────────────────────────────────
     migrations = [
@@ -107,7 +124,6 @@ def init_db(path: str) -> sqlite3.Connection:
             existing[table].add(col)
 
     conn.commit()
-    return conn
     return conn
 
 
@@ -315,6 +331,30 @@ def poll_heatmiser() -> tuple[list[dict], dict | None]:
         return [], None
 
 
+# ── Tank polling ──────────────────────────────────────────────────────────────
+def poll_tank(states_by_id: dict) -> dict | None:
+    try:
+        def val(entity_id):
+            s = states_by_id.get(entity_id, {}).get("state")
+            return safe_float(s) if s not in (None, "unavailable", "unknown") else None
+
+        result = {
+            "current_volume":  val(TANK_ENTITIES["current_volume"]),
+            "percent_full":    val(TANK_ENTITIES["percent_full"]),
+            "water_height":    val(TANK_ENTITIES["water_height"]),
+            "battery_voltage": val(TANK_ENTITIES["battery_voltage"]),
+        }
+
+        if result["current_volume"] is None and result["percent_full"] is None:
+            log.warning("Tank: no data available — check entity IDs")
+            return None
+
+        return result
+    except Exception as e:
+        log.error(f"Tank poll error: {e}")
+        return None
+
+
 # ── Main loop ──────────────────────────────────────────────────────────────────
 def main():
     conn = init_db(DB_PATH)
@@ -381,6 +421,19 @@ def main():
                 f"Heatmiser ✓  avg_floor={avg['avg_floor_temp']}°C  "
                 f"avg_air={avg['avg_air_temp']}°C  "
                 f"call_for_heat={'YES' if avg['call_for_heat'] else 'NO'}"
+            )
+
+        # Tank
+        t = poll_tank(states_by_id)
+        if t:
+            conn.execute("""
+                INSERT OR REPLACE INTO tank VALUES (?,?,?,?,?)
+            """, (ts, t["current_volume"], t["percent_full"], t["water_height"], t["battery_voltage"]))
+            log.info(
+                f"Tank ✓  volume={t['current_volume']}L  "
+                f"full={t['percent_full']}%  "
+                f"height={t['water_height']}m  "
+                f"batt={t['battery_voltage']}V"
             )
 
         conn.commit()

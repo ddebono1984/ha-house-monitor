@@ -71,6 +71,22 @@ def api_heatmiser_zones():
     return jsonify([dict(r) for r in rows])
 
 
+@app.get("/api/tank")
+def api_tank():
+    hours = int(request.args.get("hours", 24))
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT ts, current_volume, percent_full, water_height, battery_voltage
+            FROM tank
+            WHERE ts >= ?
+            ORDER BY ts ASC
+        """, (hours_ago(hours),)).fetchall()
+        return jsonify([dict(r) for r in rows])
+    except Exception:
+        return jsonify([])
+
+
 @app.get("/api/latest")
 def api_latest():
     """Single combined snapshot for the live-reading cards."""
@@ -84,9 +100,18 @@ def api_latest():
         "SELECT * FROM heatmiser_avg ORDER BY ts DESC LIMIT 1"
     ).fetchone()
 
+    t = None
+    try:
+        t = conn.execute(
+            "SELECT * FROM tank ORDER BY ts DESC LIMIT 1"
+        ).fetchone()
+    except Exception:
+        pass
+
     return jsonify({
         "zehnder":   dict(z) if z else None,
         "heatmiser": dict(h) if h else None,
+        "tank":      dict(t) if t else None,
     })
 
 

@@ -254,6 +254,23 @@
     <span class="label">Call for Heat</span>
     <span class="value" id="lv-call-heat">—</span>
   </div>
+  <div class="separator"></div>
+  <div class="live-card">
+    <span class="label">Tank Level</span>
+    <span class="value" id="lv-tank-pct">—</span>
+  </div>
+  <div class="live-card">
+    <span class="label">Volume</span>
+    <span class="value --teal" id="lv-tank-vol">—</span>
+  </div>
+  <div class="live-card">
+    <span class="label">Water Height</span>
+    <span class="value --blue" id="lv-tank-height">—</span>
+  </div>
+  <div class="live-card">
+    <span class="label">Tank Battery</span>
+    <span class="value --muted" id="lv-tank-batt">—</span>
+  </div>
 </div>
 
 <!-- Charts -->
@@ -282,6 +299,11 @@
   <div class="panel">
     <div class="panel-title">HRV Heat Recovery Efficiency</div>
     <div class="chart-wrap"><canvas id="chart-efficiency"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Water Tank — Volume (Litres)</div>
+    <div class="chart-wrap"><canvas id="chart-tank"></canvas></div>
   </div>
 
   <div class="panel">
@@ -364,6 +386,7 @@ const charts = {
   fansPct:    new Chart(document.getElementById('chart-fans-pct'),   { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('%') }),
   efficiency: new Chart(document.getElementById('chart-efficiency'), { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('%') }),
   heatmiser:  new Chart(document.getElementById('chart-heatmiser'),  { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('°C') }),
+  tank:       new Chart(document.getElementById('chart-tank'),       { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('L') }),
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -394,11 +417,12 @@ function apiUrl(path) {
 
 async function refresh() {
   try {
-    const [zRaw, hRaw, zonesRaw, latestRaw] = await Promise.all([
+    const [zRaw, hRaw, zonesRaw, latestRaw, tRaw] = await Promise.all([
       fetch(apiUrl(`/api/zehnder?hours=${currentHours}`)).then(r => r.json()),
       fetch(apiUrl(`/api/heatmiser/avg?hours=${currentHours}`)).then(r => r.json()),
       fetch(apiUrl('/api/heatmiser/zones')).then(r => r.json()),
       fetch(apiUrl('/api/latest')).then(r => r.json()),
+      fetch(apiUrl(`/api/tank?hours=${currentHours}`)).then(r => r.json()),
     ]);
 
     // ── Live cards
@@ -492,6 +516,26 @@ async function refresh() {
         </tr>
       `}).join('');
     }
+
+    // ── Tank live cards
+    const lt = latestRaw.tank;
+    if (lt) {
+      const pct = lt.percent_full;
+      const pctEl = document.getElementById('lv-tank-pct');
+      if (pctEl && pct != null) {
+        pctEl.textContent = pct.toFixed(0) + '%';
+        pctEl.className = 'value ' + (pct >= 70 ? '--green' : pct >= 30 ? '--orange' : '--red');
+      }
+      setLive('lv-tank-vol',    lt.current_volume != null ? Math.round(lt.current_volume).toLocaleString() : null, 'L');
+      setLive('lv-tank-height', lt.water_height?.toFixed(2), 'm');
+      setLive('lv-tank-batt',   lt.battery_voltage?.toFixed(2), 'V');
+    }
+
+    // ── Tank chart
+    const tLabels = tRaw.map(r => fmtTs(r.ts));
+    updateChart(charts.tank, tLabels,
+      makeDataset('Volume (L)', COLORS.teal, tRaw.map(r => r.current_volume)),
+    );
 
     document.getElementById('last-updated').textContent =
       'Last updated: ' + new Date().toLocaleTimeString('en-NZ', { hour12: false });
