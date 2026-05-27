@@ -4,11 +4,19 @@ Serves static dashboard and JSON endpoints for chart data.
 """
 
 import os
+import time
 import sqlite3
+import requests
 from flask import Flask, jsonify, send_from_directory, request
+from datetime import datetime, timedelta
 
-DB_PATH    = os.environ.get("DB_PATH",     "/data/monitor.db")
-HOUSE_NAME = os.environ.get("HOUSE_NAME", "House Monitor")
+DB_PATH       = os.environ.get("DB_PATH",       "/data/monitor.db")
+HOUSE_NAME    = os.environ.get("HOUSE_NAME",    "House Monitor")
+LATITUDE      = float(os.environ.get("LATITUDE",      "-45.03"))
+LONGITUDE     = float(os.environ.get("LONGITUDE",     "168.66"))
+HDD_BASE_TEMP = float(os.environ.get("HDD_BASE_TEMP", "18.0"))
+
+_climate_cache = {"data": None, "ts": 0}
 
 app = Flask(__name__, static_folder="static")
 
@@ -112,6 +120,69 @@ def api_tank():
         return jsonify([dict(r) for r in rows])
     except Exception:
         return jsonify([])
+
+
+def fetch_climate_normals(days: int) -> dict:
+    """Return {MM-DD: historical_mean_temp} from Open-Meteo archive, cached 24h."""
+    global _climate_cache
+    if _climate_cache["data"] and (time.time() - _climate_cache["ts"]) < 86400:
+        return _climate_cache["data"]
+    try:
+        today = datetime.utcnow().date()
+        # Same date window one year prior (archive has ~5 day lag so end 7 days ago)
+        end_hist   = today.replace(year=today.year - 1) - timedelta(days=7)
+        start_hist = end_hist - timedelta(days=days)
+        r = requests.get(
+            "https://archive-api.open-meteo.com/v1/archive",
+            params={
+                "latitude":  LATITUDE,
+                "longitude": LONGITUDE,
+                "start_date": start_hist.isoformat(),
+                "end_date":   end_hist.isoformat(),
+                "daily":      "temperature_2m_mean",
+                "timezone":   "Pacific/Auckland",
+            },
+            timeout=10,
+        )
+        r.raise_for_status()
+        daily = r.json().get("daily", {})
+        normals = {
+            t[5:]: temp
+            for t, temp in zip(daily.get("time", []), daily.get("temperature_2m_mean", []))
+            if temp is not None
+        }
+        _climate_cache = {"data": normals, "ts": time.time()}
+        return normals
+    except Exception as e:
+        app.logger.warning(f"Open-Meteo fetch failed: {e}")
+        return _climate_cache["data"] or {}
+
+
+@app.get("/api/hdd")
+def api_hdd():
+    days = int(request.args.get("days", 30))
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT day, ROUND(MAX(0.0, ? - avg_temp), 2) AS actual_hdd,
+               ROUND(avg_temp, 1) AS avg_outdoor
+        FROM (
+            SELECT date(ts) AS day, AVG(outdoor_temp) AS avg_temp
+            FROM zehnder
+            WHERE ts >= date('now', ?)
+            GROUP BY date(ts)
+        )
+        ORDER BY day ASC
+    """, (HDD_BASE_TEMP, f"-{days} days")).fetchall()
+
+    result = [dict(r) for r in rows]
+
+    normals = fetch_climate_normals(days)
+    for row in result:
+        md = row["day"][5:]  # "MM-DD"
+        hist = normals.get(md)
+        row["historical_hdd"] = round(max(0.0, HDD_BASE_TEMP - hist), 2) if hist is not None else None
+
+    return jsonify(result)
 
 
 @app.get("/api/latest")

@@ -8,6 +8,9 @@ export POLL_INTERVAL=$(bashio::config 'poll_interval')
 export ZEHNDER_DEVICE_ID=$(bashio::config 'zehnder_device_id')
 export ZEHNDER_FAN_ENTITY=$(bashio::config 'zehnder_fan_entity')
 export TANK_DEVICE_ID=$(bashio::config 'tank_device_id' 2>/dev/null || echo "")
+export LATITUDE=$(bashio::config 'latitude')
+export LONGITUDE=$(bashio::config 'longitude')
+export HDD_BASE_TEMP=$(bashio::config 'hdd_base_temp')
 
 # ── HA API token (injected automatically by Supervisor) ───────────────────────
 export HA_TOKEN="${SUPERVISOR_TOKEN}"

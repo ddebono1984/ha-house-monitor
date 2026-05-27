@@ -223,6 +223,10 @@
     <span class="label">Outdoor Temp</span>
     <span class="value --teal"  id="lv-outdoor-temp">—</span>
   </div>
+  <div class="live-card">
+    <span class="label">HDD Today</span>
+    <span class="value --purple" id="lv-hdd-today">—</span>
+  </div>
   <div class="separator"></div>
   <div class="live-card">
     <span class="label">Supply RH</span>
@@ -324,6 +328,11 @@
   </div>
 
   <div class="panel">
+    <div class="panel-title">Heating Degree Days — Base 18°C <span style="font-size:0.6em;color:var(--muted);margin-left:0.5em">bars = actual · dashed = Open-Meteo historical</span></div>
+    <div class="chart-wrap"><canvas id="chart-hdd"></canvas></div>
+  </div>
+
+  <div class="panel">
     <div class="panel-title">Heatmiser — Zone Status (latest)</div>
     <table class="zones-table">
       <thead>
@@ -407,7 +416,31 @@ const charts = {
   thermal:    new Chart(document.getElementById('chart-thermal'),    { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('ΔT °C') }),
 };
 
+// HDD chart — separate init (bar type with line overlay)
+const hddChart = new Chart(document.getElementById('chart-hdd'), {
+  type: 'bar',
+  data: { labels: [], datasets: [] },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 10, padding: 16 } },
+      tooltip: { bodyFont: { family: "'DM Mono', monospace", size: 11 } },
+    },
+    scales: {
+      x: { ticks: { maxTicksLimit: 10, maxRotation: 0 }, grid: { color: '#21262d' } },
+      y: { title: { display: true, text: 'HDD' }, grid: { color: '#21262d' }, min: 0 },
+    },
+  },
+});
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
+function fmtDate(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+}
+
 function fmtTs(ts) {
   const d = new Date(ts + 'Z');
   if (currentHours <= 24) {
@@ -445,13 +478,15 @@ function apiUrl(path) {
 
 async function refresh() {
   try {
-    const [zRaw, hRaw, zonesRaw, latestRaw, tRaw, thRaw] = await Promise.all([
+    const hddDays = currentHours <= 6 ? 7 : currentHours <= 24 ? 14 : currentHours <= 72 ? 21 : 30;
+    const [zRaw, hRaw, zonesRaw, latestRaw, tRaw, thRaw, hddRaw] = await Promise.all([
       fetch(apiUrl(`/api/zehnder?hours=${currentHours}`)).then(r => r.json()),
       fetch(apiUrl(`/api/heatmiser/avg?hours=${currentHours}`)).then(r => r.json()),
       fetch(apiUrl('/api/heatmiser/zones')).then(r => r.json()),
       fetch(apiUrl('/api/latest')).then(r => r.json()),
       fetch(apiUrl(`/api/tank?hours=${currentHours}`)).then(r => r.json()),
       fetch(apiUrl(`/api/thermal?hours=${currentHours}`)).then(r => r.json()),
+      fetch(apiUrl(`/api/hdd?days=${hddDays}`)).then(r => r.json()),
     ]);
 
     // ── Live cards
@@ -614,6 +649,35 @@ async function refresh() {
       makeDataset('Outdoor Drive (air−outdoor)',  COLORS.teal,   thRaw.map(r => r.outdoor_drive)),
       makeDataset('Slab−Outdoor ΔT',             COLORS.purple, thRaw.map(r => r.slab_outdoor_delta)),
     );
+
+    // ── HDD chart + live card
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayHdd = hddRaw.find(r => r.day === todayStr);
+    setLive('lv-hdd-today', todayHdd?.actual_hdd?.toFixed(1), '');
+
+    hddChart.data.labels = hddRaw.map(r => fmtDate(r.day));
+    hddChart.data.datasets = [
+      {
+        type: 'bar',
+        label: 'Actual HDD',
+        data: hddRaw.map(r => r.actual_hdd),
+        backgroundColor: COLORS.blue + '55',
+        borderColor: COLORS.blue,
+        borderWidth: 1,
+      },
+      {
+        type: 'line',
+        label: 'Historical Avg (prev year)',
+        data: hddRaw.map(r => r.historical_hdd),
+        borderColor: COLORS.teal,
+        borderDash: [5, 5],
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: false,
+      },
+    ];
+    hddChart.update('none');
 
     document.getElementById('last-updated').textContent =
       'Last updated: ' + new Date().toLocaleTimeString('en-NZ', { hour12: false });
