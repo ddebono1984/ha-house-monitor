@@ -481,7 +481,18 @@ const CHART_VIEWS = [
     build: (z, h, t, th) => ({
       labels: th.map(r => fmtTs(r.ts)),
       datasets: [
-        ds('Slab Charge (floor−air)',     C.orange, th.map(r => r.floor_air_delta)),
+        {
+          label: 'Slab Charge (floor−air)',
+          data: th.map(r => r.floor_air_delta),
+          borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false,
+          backgroundColor: C.orange + '15',
+          segment: {
+            borderColor: ctx => {
+              const v = ctx.p1.parsed.y;
+              return v > 3 ? C.green : v > 0 ? C.orange : C.red;
+            },
+          },
+        },
         ds('Outdoor Drive (air−outdoor)', C.teal,   th.map(r => r.outdoor_drive)),
         ds('Slab−Outdoor ΔT',            C.purple, th.map(r => r.slab_outdoor_delta)),
       ]

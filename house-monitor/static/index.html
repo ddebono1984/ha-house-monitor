@@ -594,8 +594,23 @@ async function refresh() {
 
     // ── Thermal balance chart
     const thLabels = thRaw.map(r => fmtTs(r.ts));
+    const slabData = thRaw.map(r => r.floor_air_delta);
     updateChart(charts.thermal, thLabels,
-      makeDataset('Slab Charge (floor−air)',      COLORS.orange, thRaw.map(r => r.floor_air_delta)),
+      {
+        label: 'Slab Charge (floor−air)',
+        data: slabData,
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: false,
+        segment: {
+          borderColor: ctx => {
+            const v = ctx.p1.parsed.y;
+            return v > 3 ? COLORS.green : v > 0 ? COLORS.orange : COLORS.red;
+          },
+        },
+        backgroundColor: COLORS.orange + '18',
+      },
       makeDataset('Outdoor Drive (air−outdoor)',  COLORS.teal,   thRaw.map(r => r.outdoor_drive)),
       makeDataset('Slab−Outdoor ΔT',             COLORS.purple, thRaw.map(r => r.slab_outdoor_delta)),
     );
