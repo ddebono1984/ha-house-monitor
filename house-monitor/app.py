@@ -195,7 +195,7 @@ def api_hdd():
         FROM (
             SELECT date(ts) AS day, AVG(outdoor_temp) AS avg_temp
             FROM zehnder
-            WHERE ts >= date('now', ?)
+            WHERE ts >= date('now', ?) AND date(ts) < date('now')
             GROUP BY date(ts)
         )
         ORDER BY day ASC
