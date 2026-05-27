@@ -476,10 +476,22 @@ const CHART_VIEWS = [
     }),
     yLabel: 'L',
   },
+  {
+    title: 'Thermal Balance — ΔT',
+    build: (z, h, t, th) => ({
+      labels: th.map(r => fmtTs(r.ts)),
+      datasets: [
+        ds('Slab Charge (floor−air)',     C.orange, th.map(r => r.floor_air_delta)),
+        ds('Outdoor Drive (air−outdoor)', C.teal,   th.map(r => r.outdoor_drive)),
+        ds('Slab−Outdoor ΔT',            C.purple, th.map(r => r.slab_outdoor_delta)),
+      ]
+    }),
+    yLabel: 'ΔT °C',
+  },
 ];
 
 let chartIdx = 0;
-let zData = [], hData = [], zonesData = [], tData = [];
+let zData = [], hData = [], zonesData = [], tData = [], thData = [];
 
 // ── Dots ──────────────────────────────────────────────────────────────────────
 function buildDots() {
@@ -523,7 +535,7 @@ updateClock();
 function renderMainChart() {
   const view = CHART_VIEWS[chartIdx];
   document.getElementById('chart-title').textContent = view.title;
-  const built = view.build(zData, hData, tData);
+  const built = view.build(zData, hData, tData, thData);
   mainChart.data.labels = built.labels;
   mainChart.data.datasets = built.datasets;
   mainChart.options.scales.y.title.text = view.yLabel;
@@ -626,18 +638,20 @@ function apiUrl(path) {
 
 async function refresh() {
   try {
-    const [zRaw, hRaw, zonesRaw, latestRaw, tRaw] = await Promise.all([
+    const [zRaw, hRaw, zonesRaw, latestRaw, tRaw, thRaw] = await Promise.all([
       fetch(apiUrl('/api/zehnder?hours=24')).then(r => r.json()),
       fetch(apiUrl('/api/heatmiser/avg?hours=24')).then(r => r.json()),
       fetch(apiUrl('/api/heatmiser/zones')).then(r => r.json()),
       fetch(apiUrl('/api/latest')).then(r => r.json()),
       fetch(apiUrl('/api/tank?hours=24')).then(r => r.json()),
+      fetch(apiUrl('/api/thermal?hours=24')).then(r => r.json()),
     ]);
 
     zData     = zRaw;
     hData     = hRaw;
     zonesData = zonesRaw;
     tData     = tRaw;
+    thData    = thRaw;
 
     renderLiveCards(latestRaw.zehnder, latestRaw.heatmiser, latestRaw);
     renderMainChart();

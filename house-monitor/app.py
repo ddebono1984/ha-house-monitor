@@ -77,6 +77,27 @@ def api_heatmiser_zones():
     return jsonify([dict(r) for r in rows])
 
 
+@app.get("/api/thermal")
+def api_thermal():
+    hours = int(request.args.get("hours", 24))
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT
+                z.ts,
+                ROUND(h.avg_floor_temp - h.avg_air_temp,    2) AS floor_air_delta,
+                ROUND(h.avg_air_temp   - z.outdoor_temp,    2) AS outdoor_drive,
+                ROUND(h.avg_floor_temp - z.outdoor_temp,    2) AS slab_outdoor_delta
+            FROM zehnder z
+            INNER JOIN heatmiser_avg h ON z.ts = h.ts
+            WHERE z.ts >= ?
+            ORDER BY z.ts ASC
+        """, (hours_ago(hours),)).fetchall()
+        return jsonify([dict(r) for r in rows])
+    except Exception:
+        return jsonify([])
+
+
 @app.get("/api/tank")
 def api_tank():
     hours = int(request.args.get("hours", 24))

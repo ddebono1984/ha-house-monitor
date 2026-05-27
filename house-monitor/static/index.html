@@ -256,6 +256,15 @@
   </div>
   <div class="separator"></div>
   <div class="live-card">
+    <span class="label">Slab Charge</span>
+    <span class="value" id="lv-floor-air-delta">—</span>
+  </div>
+  <div class="live-card">
+    <span class="label">Outdoor Drive</span>
+    <span class="value --teal" id="lv-outdoor-drive">—</span>
+  </div>
+  <div class="separator"></div>
+  <div class="live-card">
     <span class="label">Tank Level</span>
     <span class="value" id="lv-tank-pct">—</span>
   </div>
@@ -307,6 +316,11 @@
   <div class="panel">
     <div class="panel-title">Water Tank — Volume (Litres)</div>
     <div class="chart-wrap"><canvas id="chart-tank"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Thermal Balance — ΔT (°C)</div>
+    <div class="chart-wrap"><canvas id="chart-thermal"></canvas></div>
   </div>
 
   <div class="panel">
@@ -390,6 +404,7 @@ const charts = {
   efficiency: new Chart(document.getElementById('chart-efficiency'), { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('%') }),
   heatmiser:  new Chart(document.getElementById('chart-heatmiser'),  { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('°C') }),
   tank:       new Chart(document.getElementById('chart-tank'),       { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('L') }),
+  thermal:    new Chart(document.getElementById('chart-thermal'),    { type: 'line', data: { labels: [], datasets: [] }, options: chartOpts('ΔT °C') }),
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -430,12 +445,13 @@ function apiUrl(path) {
 
 async function refresh() {
   try {
-    const [zRaw, hRaw, zonesRaw, latestRaw, tRaw] = await Promise.all([
+    const [zRaw, hRaw, zonesRaw, latestRaw, tRaw, thRaw] = await Promise.all([
       fetch(apiUrl(`/api/zehnder?hours=${currentHours}`)).then(r => r.json()),
       fetch(apiUrl(`/api/heatmiser/avg?hours=${currentHours}`)).then(r => r.json()),
       fetch(apiUrl('/api/heatmiser/zones')).then(r => r.json()),
       fetch(apiUrl('/api/latest')).then(r => r.json()),
       fetch(apiUrl(`/api/tank?hours=${currentHours}`)).then(r => r.json()),
+      fetch(apiUrl(`/api/thermal?hours=${currentHours}`)).then(r => r.json()),
     ]);
 
     // ── Live cards
@@ -476,6 +492,21 @@ async function refresh() {
         cfhEl.textContent = on ? 'ACTIVE' : 'IDLE';
         cfhEl.className = 'value ' + (on ? '--green' : '--muted');
       }
+    }
+
+    // ── Thermal balance live cards (computed from latest snapshot)
+    if (lz && lh) {
+      const floorAir = lh.avg_floor_temp != null && lh.avg_air_temp != null
+        ? (lh.avg_floor_temp - lh.avg_air_temp) : null;
+      const outDrive = lh.avg_air_temp != null && lz.outdoor_temp != null
+        ? (lh.avg_air_temp - lz.outdoor_temp) : null;
+
+      const faEl = document.getElementById('lv-floor-air-delta');
+      if (faEl && floorAir != null) {
+        faEl.textContent = (floorAir >= 0 ? '+' : '') + floorAir.toFixed(1) + '°C';
+        faEl.className = 'value ' + (floorAir > 4 ? '--orange' : floorAir > 1 ? '--green' : '--muted');
+      }
+      setLive('lv-outdoor-drive', outDrive != null ? (outDrive >= 0 ? '+' : '') + outDrive.toFixed(1) : null, '°C');
     }
 
     // ── MVHR Temps chart
@@ -559,6 +590,14 @@ async function refresh() {
     const tLabels = tRaw.map(r => fmtTs(r.ts));
     updateChart(charts.tank, tLabels,
       makeDataset('Volume (L)', COLORS.teal, tRaw.map(r => r.current_volume)),
+    );
+
+    // ── Thermal balance chart
+    const thLabels = thRaw.map(r => fmtTs(r.ts));
+    updateChart(charts.thermal, thLabels,
+      makeDataset('Slab Charge (floor−air)',      COLORS.orange, thRaw.map(r => r.floor_air_delta)),
+      makeDataset('Outdoor Drive (air−outdoor)',  COLORS.teal,   thRaw.map(r => r.outdoor_drive)),
+      makeDataset('Slab−Outdoor ΔT',             COLORS.purple, thRaw.map(r => r.slab_outdoor_delta)),
     );
 
     document.getElementById('last-updated').textContent =
