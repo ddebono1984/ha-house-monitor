@@ -504,7 +504,7 @@ async function refresh() {
       const faEl = document.getElementById('lv-floor-air-delta');
       if (faEl && floorAir != null) {
         faEl.textContent = (floorAir >= 0 ? '+' : '') + floorAir.toFixed(1) + '°C';
-        faEl.className = 'value ' + (floorAir > 4 ? '--orange' : floorAir > 1 ? '--green' : '--muted');
+        faEl.className = 'value ' + (floorAir > 3 ? '--green' : floorAir > 0 ? '--orange' : '--red');
       }
       setLive('lv-outdoor-drive', outDrive != null ? (outDrive >= 0 ? '+' : '') + outDrive.toFixed(1) : null, '°C');
     }
