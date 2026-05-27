@@ -123,26 +123,32 @@ def api_tank():
 
 
 def fetch_climate_normals(days: int) -> dict:
-    """Return {MM-DD: historical_mean_temp} from Open-Meteo archive, cached 24h."""
+    """Return {MM-DD: historical_mean_temp} from Open-Meteo archive, cached 24h.
+    Fetches a wider window (days+14) so the overlap covers the full actual range.
+    Failures are cached for 30 min to avoid hammering the API on every request."""
     global _climate_cache
-    if _climate_cache["data"] and (time.time() - _climate_cache["ts"]) < 86400:
-        return _climate_cache["data"]
+    age = time.time() - _climate_cache["ts"]
+    # Return cache if fresh, or if it's a failure cache that's less than 30 min old
+    if _climate_cache["ts"] > 0:
+        ttl = 86400 if _climate_cache["data"] else 1800
+        if age < ttl:
+            return _climate_cache["data"] or {}
     try:
         today = datetime.utcnow().date()
-        # Same date window one year prior (archive has ~5 day lag so end 7 days ago)
-        end_hist   = today.replace(year=today.year - 1) - timedelta(days=7)
-        start_hist = end_hist - timedelta(days=days)
+        # Fetch a window wider than requested — archive lags ~5 days so end 6 days ago
+        end_hist   = today.replace(year=today.year - 1) - timedelta(days=6)
+        start_hist = end_hist - timedelta(days=days + 14)
         r = requests.get(
             "https://archive-api.open-meteo.com/v1/archive",
             params={
-                "latitude":  LATITUDE,
-                "longitude": LONGITUDE,
+                "latitude":   LATITUDE,
+                "longitude":  LONGITUDE,
                 "start_date": start_hist.isoformat(),
                 "end_date":   end_hist.isoformat(),
                 "daily":      "temperature_2m_mean",
-                "timezone":   "Pacific/Auckland",
+                "timezone":   "UTC",
             },
-            timeout=10,
+            timeout=8,
         )
         r.raise_for_status()
         daily = r.json().get("daily", {})
@@ -151,11 +157,13 @@ def fetch_climate_normals(days: int) -> dict:
             for t, temp in zip(daily.get("time", []), daily.get("temperature_2m_mean", []))
             if temp is not None
         }
+        app.logger.info(f"Open-Meteo: fetched {len(normals)} days of historical temps ({start_hist} to {end_hist})")
         _climate_cache = {"data": normals, "ts": time.time()}
         return normals
     except Exception as e:
         app.logger.warning(f"Open-Meteo fetch failed: {e}")
-        return _climate_cache["data"] or {}
+        _climate_cache = {"data": None, "ts": time.time()}  # cache the failure
+        return {}
 
 
 @app.get("/api/hdd")
