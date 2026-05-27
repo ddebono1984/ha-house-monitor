@@ -395,7 +395,17 @@ const charts = {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function fmtTs(ts) {
   const d = new Date(ts + 'Z');
-  return d.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
+  if (currentHours <= 24) {
+    // 6h / 24h — time only: "14:30"
+    return d.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
+  } else if (currentHours <= 72) {
+    // 3d — weekday + time: "Mon 14:00"
+    return d.toLocaleDateString('en-NZ', { weekday: 'short' }) + ' ' +
+           d.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', hour12: false });
+  } else {
+    // 7d — weekday + date: "Mon 27"
+    return d.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric' });
+  }
 }
 
 function updateChart(chart, labels, ...datasets) {
@@ -563,6 +573,11 @@ function setRange(hours) {
   currentHours = hours;
   document.querySelectorAll('.range-pills button').forEach(b => {
     b.classList.toggle('active', +b.dataset.h === hours);
+  });
+  // Adjust tick density to suit the time window
+  const maxTicks = hours <= 6 ? 7 : hours <= 24 ? 9 : hours <= 72 ? 7 : 8;
+  Object.values(charts).forEach(c => {
+    c.options.scales.x.ticks.maxTicksLimit = maxTicks;
   });
   refresh();
 }
