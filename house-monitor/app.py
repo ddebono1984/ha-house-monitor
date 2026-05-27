@@ -4,7 +4,9 @@ Serves static dashboard and JSON endpoints for chart data.
 """
 
 import os
+import sys
 import time
+import calendar
 import sqlite3
 import requests
 from flask import Flask, jsonify, send_from_directory, request
@@ -17,6 +19,24 @@ LONGITUDE     = float(os.environ.get("LONGITUDE",     "168.66"))
 HDD_BASE_TEMP = float(os.environ.get("HDD_BASE_TEMP", "18.0"))
 
 _climate_cache = {"data": None, "ts": 0}
+
+# Queenstown NZ monthly mean temperatures °C (NIWA 30-year climate normals).
+# Used as a fallback when the Open-Meteo archive API is unreachable.
+_QT_MONTHLY_MEANS = {
+    1: 17.3, 2: 17.0, 3: 14.6, 4: 11.0, 5: 7.4, 6: 4.8,
+    7: 4.3, 8: 6.2, 9: 9.0, 10: 11.5, 11: 13.8, 12: 16.0,
+}
+
+
+def _fallback_normals() -> dict:
+    """Return {MM-DD: mean_temp} from static Queenstown NIWA monthly means."""
+    result = {}
+    for month, mean in _QT_MONTHLY_MEANS.items():
+        _, n_days = calendar.monthrange(2000, month)
+        for day in range(1, n_days + 1):
+            result[f"{month:02d}-{day:02d}"] = mean
+    return result
+
 
 app = Flask(__name__, static_folder="static")
 
@@ -124,15 +144,14 @@ def api_tank():
 
 def fetch_climate_normals(days: int) -> dict:
     """Return {MM-DD: historical_mean_temp} from Open-Meteo archive, cached 24h.
-    Fetches a wider window (days+14) so the overlap covers the full actual range.
+    Falls back to static Queenstown NIWA monthly means if the API is unreachable.
     Failures are cached for 30 min to avoid hammering the API on every request."""
     global _climate_cache
     age = time.time() - _climate_cache["ts"]
-    # Return cache if fresh, or if it's a failure cache that's less than 30 min old
     if _climate_cache["ts"] > 0:
         ttl = 86400 if _climate_cache["data"] else 1800
         if age < ttl:
-            return _climate_cache["data"] or {}
+            return _climate_cache["data"] if _climate_cache["data"] else _fallback_normals()
     try:
         today = datetime.utcnow().date()
         # Fetch a window wider than requested — archive lags ~5 days so end 6 days ago
@@ -148,7 +167,7 @@ def fetch_climate_normals(days: int) -> dict:
                 "daily":      "temperature_2m_mean",
                 "timezone":   "UTC",
             },
-            timeout=8,
+            timeout=10,
         )
         r.raise_for_status()
         daily = r.json().get("daily", {})
@@ -157,13 +176,13 @@ def fetch_climate_normals(days: int) -> dict:
             for t, temp in zip(daily.get("time", []), daily.get("temperature_2m_mean", []))
             if temp is not None
         }
-        app.logger.info(f"Open-Meteo: fetched {len(normals)} days of historical temps ({start_hist} to {end_hist})")
+        print(f"[house-monitor] Open-Meteo: fetched {len(normals)} days of historical temps ({start_hist} to {end_hist})", file=sys.stderr)
         _climate_cache = {"data": normals, "ts": time.time()}
         return normals
     except Exception as e:
-        app.logger.warning(f"Open-Meteo fetch failed: {e}")
-        _climate_cache = {"data": None, "ts": time.time()}  # cache the failure
-        return {}
+        print(f"[house-monitor] Open-Meteo fetch failed: {e}. Using static Queenstown climate normals.", file=sys.stderr)
+        _climate_cache = {"data": None, "ts": time.time()}
+        return _fallback_normals()
 
 
 @app.get("/api/hdd")
