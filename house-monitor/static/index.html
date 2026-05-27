@@ -437,8 +437,9 @@ const hddChart = new Chart(document.getElementById('chart-hdd'), {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function fmtDate(dateStr) {
-  const d = new Date(dateStr + 'T12:00:00Z');
-  return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const [, m, d] = dateStr.split('-').map(Number);
+  return `${d} ${MONTHS[m - 1]}`;
 }
 
 function fmtTs(ts) {
