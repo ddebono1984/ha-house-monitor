@@ -203,10 +203,13 @@ def api_hdd():
 
     result = [dict(r) for r in rows]
 
-    normals = fetch_climate_normals(days)
+    normals  = fetch_climate_normals(days)
+    fallback = _fallback_normals()
     for row in result:
-        md = row["day"][5:]  # "MM-DD"
-        hist = normals.get(md)
+        md   = row["day"][5:]          # "MM-DD"
+        hist = normals.get(md)         # Open-Meteo historical (may be None for recent days)
+        if hist is None:
+            hist = fallback.get(md)    # NIWA monthly mean for days within the archive lag
         row["historical_hdd"] = round(max(0.0, HDD_BASE_TEMP - hist), 2) if hist is not None else None
 
     return jsonify(result)

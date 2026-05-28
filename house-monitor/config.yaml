@@ -1,6 +1,6 @@
 name: "House Monitor"
 description: "Live dashboard for Zehnder ComfoAir Q, Heatmiser Neostat and TankMate water tanks — temps, humidity, HRV efficiency, floor heating and tank levels."
-version: "1.2.4"
+version: "1.2.5"
 slug: "house-monitor"
 init: false
 arch:
